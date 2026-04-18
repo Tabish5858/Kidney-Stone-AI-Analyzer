@@ -1,11 +1,11 @@
 # Kidney Stone AI Analyzer
 
-A full-stack AI-powered web application for classifying kidney CT scan images as Normal, Cyst, Stone, or Tumor.
+A full-stack AI-powered web application for kidney stone detection from CT scan images.
 
 ## Features
 
-- User login authentication
 - Upload and analyze kidney CT scan images
+- Stone-focused API decisioning (`stone` vs `non-stone`)
 - Deep learning model (MobileNetV2 transfer learning)
 - Real API-backed predictions with confidence scores
 - Kaggle dataset integration pipeline for stone ROI augmentation
@@ -48,6 +48,12 @@ A full-stack AI-powered web application for classifying kidney CT scan images as
    python app.py
    ```
 
+   Production-style run for demos:
+
+   ```
+   gunicorn --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:5000 wsgi:app
+   ```
+
 5. Verify backend health:
    ```
    curl http://localhost:5000/health
@@ -81,11 +87,6 @@ A full-stack AI-powered web application for classifying kidney CT scan images as
 
 5. Open your browser at [http://localhost:8080](http://localhost:8080)
 
-### Login Credentials
-
-- **Username:** admin
-- **Password:** password123
-
 ## Project Structure
 
 ```
@@ -115,6 +116,8 @@ The `data/` directory contains ~12,000 CT scan images organized by class:
 - **Normal**: 5,077 images
 - **Stone**: 1,377 images
 - **Tumor**: 2,283 images
+
+The serving API is now stone-focused: model output is converted into `stone_detected` and `stone_probability` for deployment simplicity.
 
 **Note:** The whole dataset is excluded from the Git repository due to its large size (~GB). If you need to download the Dataset completly then See `data/README.md` for more details.
 

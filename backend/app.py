@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 app = Flask(__name__)
 
@@ -25,6 +25,7 @@ CORS(app, resources={r"/*": {"origins": allowed_origins}})
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "kidney_stone_cnn_model.h5"
 LABELS_PATH = BASE_DIR / "class_labels.json"
+STONE_CLASS_LABEL = os.getenv("STONE_CLASS_LABEL", "stone").strip().lower()
 
 
 def load_inference_model(model_path: Path) -> tf.keras.Model:
@@ -47,9 +48,46 @@ def load_inference_model(model_path: Path) -> tf.keras.Model:
         )
 
 
+def parse_probability_threshold(value: str | None, default_value: float = 0.5) -> float:
+    if value is None:
+        return default_value
+
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default_value
+
+    if parsed < 0.0 or parsed > 1.0:
+        return default_value
+
+    return parsed
+
+
+def find_stone_label_index(label_map: dict[str, str], stone_label: str) -> int:
+    for index_text, class_name in label_map.items():
+        if str(class_name).strip().lower() != stone_label:
+            continue
+
+        try:
+            return int(index_text)
+        except (TypeError, ValueError):
+            break
+
+    raise RuntimeError(
+        f"Stone label '{stone_label}' was not found in class labels: {label_map}"
+    )
+
+
+def error_response(message: str, status_code: int):
+    return jsonify({"error": message}), status_code
+
+
 model = load_inference_model(MODEL_PATH)
 with LABELS_PATH.open("r", encoding="utf-8") as f:
     labels = json.load(f)
+
+STONE_LABEL_INDEX = find_stone_label_index(labels, STONE_CLASS_LABEL)
+STONE_THRESHOLD = parse_probability_threshold(os.getenv("STONE_THRESHOLD"), 0.5)
 
 
 def infer_model_image_size(
@@ -75,10 +113,27 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
+def warmup_inference_model() -> bool:
+    warmup_tensor = np.zeros((1, IMAGE_SIZE[0], IMAGE_SIZE[1], 3), dtype=np.float32)
+    _ = model.predict(warmup_tensor, verbose=0)
+    return True
+
+
+try:
+    MODEL_READY = warmup_inference_model()
+except Exception:
+    app.logger.exception("Model warmup failed during startup")
+    MODEL_READY = False
+
+
 def prepare_image(image_file):
-    img = Image.open(image_file).convert("RGB")
-    img = img.resize(IMAGE_SIZE)
-    img_array = tf.keras.preprocessing.image.img_to_array(img)
+    image_file.stream.seek(0)
+    with Image.open(image_file.stream) as raw_image:
+        img = ImageOps.exif_transpose(raw_image).convert("RGB")
+        img = img.resize(IMAGE_SIZE)
+        img_array = tf.keras.preprocessing.image.img_to_array(img)
+
+    image_file.stream.seek(0)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array.astype(np.float32)
 
@@ -93,53 +148,74 @@ def health_check():
     return jsonify({"status": "ok"})
 
 
+@app.route("/ready", methods=["GET"])
+def readiness_check():
+    payload = {
+        "status": "ready" if MODEL_READY else "not_ready",
+        "stone_threshold": STONE_THRESHOLD,
+        "stone_class_label": STONE_CLASS_LABEL,
+        "model_input_size": {"width": IMAGE_SIZE[0], "height": IMAGE_SIZE[1]},
+    }
+    return jsonify(payload), 200 if MODEL_READY else 503
+
+
 @app.route("/predict", methods=["POST"])
 def predict():
+    if not MODEL_READY:
+        return error_response("Model is not ready to serve predictions.", 503)
+
     if request.content_length and request.content_length > MAX_UPLOAD_BYTES:
-        return jsonify({"error": "File too large. Maximum allowed size is 10MB."}), 413
+        return error_response("File too large. Maximum allowed size is 10MB.", 413)
 
     if "file" not in request.files:
-        return jsonify({"error": "No file part"}), 400
+        return error_response("No file part", 400)
 
     file = request.files["file"]
 
     if file.filename is None or file.filename.strip() == "":
-        return jsonify({"error": "Empty filename"}), 400
+        return error_response("Empty filename", 400)
 
     if not is_allowed_file(file.filename):
-        return jsonify({"error": "Unsupported file type"}), 400
+        return error_response("Unsupported file type", 400)
 
     try:
         prepared_image = prepare_image(file)
+    except (UnidentifiedImageError, OSError):
+        return error_response("Invalid or corrupted image file", 400)
+    except Exception:
+        app.logger.exception("Image preparation failed")
+        return error_response("Failed to process the uploaded image", 400)
 
+    try:
         # Make prediction
         predictions = model.predict(prepared_image, verbose=0)
+        probabilities = predictions[0]
 
-        # Get the class with the highest probability
-        predicted_index = np.argmax(predictions[0])
-        confidence = float(predictions[0][predicted_index])
+        if STONE_LABEL_INDEX >= len(probabilities):
+            raise ValueError("Stone class index is out of model output range")
 
-        # Map index to label name
-        predicted_label = labels.get(str(predicted_index), "Unknown")
+        stone_probability = float(probabilities[STONE_LABEL_INDEX])
+        stone_detected = stone_probability >= STONE_THRESHOLD
+
+        top_index = int(np.argmax(probabilities))
+        top_confidence = float(probabilities[top_index])
+
+        top_label = labels.get(str(top_index), "unknown")
 
         return jsonify(
-            {"prediction_label": predicted_label, "confidence": f"{confidence:.2f}"}
+            {
+                "prediction_label": "stone" if stone_detected else "non-stone",
+                "stone_detected": stone_detected,
+                "stone_probability": stone_probability,
+                "confidence": f"{stone_probability:.2f}",
+                "decision_threshold": STONE_THRESHOLD,
+                "top_class_label": top_label,
+                "top_class_confidence": top_confidence,
+            }
         )
     except Exception:
         app.logger.exception("Prediction failed for uploaded image")
-        return jsonify({"error": "Prediction failed for the uploaded image"}), 500
-
-
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.get_json(silent=True) or {}
-    username = data.get("username")
-    password = data.get("password")
-    # Hardcoded credentials
-    if username == "admin" and password == "password123":
-        return jsonify({"success": True, "message": "Login successful"})
-    else:
-        return jsonify({"success": False, "message": "Invalid credentials"}), 401
+        return error_response("Prediction failed for the uploaded image", 500)
 
 
 if __name__ == "__main__":

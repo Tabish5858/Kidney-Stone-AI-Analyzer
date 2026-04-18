@@ -3,13 +3,21 @@ import { Activity, AlertCircle, CheckCircle, FileImage, Stethoscope, Upload } fr
 import React, { useRef, useState } from 'react';
 
 interface AnalysisResult {
-  label: string;
-  confidence: number;
+  stoneDetected: boolean;
+  stoneProbability: number;
+  decisionThreshold: number;
+  topClassLabel: string;
+  topClassConfidence: number;
 }
 
 interface PredictResponse {
   prediction_label: string;
   confidence: string | number;
+  stone_detected?: boolean;
+  stone_probability?: number;
+  decision_threshold?: number;
+  top_class_label?: string;
+  top_class_confidence?: number;
   error?: string;
 }
 
@@ -95,11 +103,27 @@ export const KidneyScanAnalyzer = () => {
         throw new Error('Backend returned an invalid confidence value.');
       }
 
-      const normalizedConfidence = rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
+      const fallbackConfidence = rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
+      const stoneProbability =
+        typeof data.stone_probability === 'number' ? data.stone_probability : fallbackConfidence;
+      const stoneDetected =
+        typeof data.stone_detected === 'boolean'
+          ? data.stone_detected
+          : data.prediction_label.toLowerCase() === 'stone';
+      const decisionThreshold =
+        typeof data.decision_threshold === 'number' ? data.decision_threshold : 0.5;
+      const topClassLabel = data.top_class_label ?? data.prediction_label;
+      const topClassConfidence =
+        typeof data.top_class_confidence === 'number'
+          ? data.top_class_confidence
+          : fallbackConfidence;
 
       setResult({
-        label: data.prediction_label,
-        confidence: Math.max(0, Math.min(1, normalizedConfidence)),
+        stoneDetected,
+        stoneProbability: Math.max(0, Math.min(1, stoneProbability)),
+        decisionThreshold: Math.max(0, Math.min(1, decisionThreshold)),
+        topClassLabel,
+        topClassConfidence: Math.max(0, Math.min(1, topClassConfidence)),
       });
     } catch (error: unknown) {
       const message =
@@ -112,30 +136,16 @@ export const KidneyScanAnalyzer = () => {
     }
   };
 
-  const getResultColor = (label: string) => {
-    switch (label.toLowerCase()) {
-      case 'normal':
-        return 'text-medical-success';
-      case 'cyst':
-      case 'stone':
-      case 'tumor':
-        return 'text-medical-warning';
-      default:
-        return 'text-foreground';
-    }
+  const getResultColor = (stoneDetected: boolean) => {
+    return stoneDetected ? 'text-destructive' : 'text-medical-success';
   };
 
-  const getResultIcon = (label: string) => {
-    switch (label.toLowerCase()) {
-      case 'normal':
-        return <CheckCircle className="h-5 w-5 text-medical-success" />;
-      case 'cyst':
-      case 'stone':
-      case 'tumor':
-        return <AlertCircle className="h-5 w-5 text-medical-warning" />;
-      default:
-        return <Activity className="h-5 w-5 text-foreground" />;
-    }
+  const getResultIcon = (stoneDetected: boolean) => {
+    return stoneDetected ? (
+      <AlertCircle className="h-5 w-5 text-destructive" />
+    ) : (
+      <CheckCircle className="h-5 w-5 text-medical-success" />
+    );
   };
 
   return (
@@ -145,12 +155,11 @@ export const KidneyScanAnalyzer = () => {
           <div className="flex items-center justify-center gap-3 mb-4">
             <Stethoscope className="h-10 w-10 text-primary" />
             <h1 className="text-4xl font-bold text-medical-blue-dark">
-              AI-Powered Kidney Scan Analyzer
+              AI Kidney Stone Detection
             </h1>
-            <span className="text-4xl">🩺</span>
           </div>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Upload a patient's axial CT scan to classify the kidney's condition using advanced AI technology.
+            Upload a kidney CT scan image to screen for probable stone presence with confidence scoring.
           </p>
         </div>
 
@@ -162,7 +171,7 @@ export const KidneyScanAnalyzer = () => {
                 Upload CT Scan
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Select or drag and drop a CT scan image for analysis.
+                Select or drag and drop a CT scan image for stone-focused analysis.
               </p>
             </div>
 
@@ -207,7 +216,7 @@ export const KidneyScanAnalyzer = () => {
                   <div>
                     <p className="text-lg font-medium">Drag and Drop CT Scan Image Here</p>
                     <p className="text-sm text-muted-foreground">
-                      Supports JPG, PNG, and other image formats (max 10MB)
+                      Supports JPG, PNG, and other image formats (max 10MB per scan)
                     </p>
                   </div>
                 </div>
@@ -235,12 +244,12 @@ export const KidneyScanAnalyzer = () => {
               {isAnalyzing ? (
                 <>
                   <Activity className="h-5 w-5 animate-spin mr-2" />
-                  Analyzing Scan...
+                  Detecting Stone Risk...
                 </>
               ) : (
                 <>
                   <Stethoscope className="h-5 w-5 mr-2" />
-                  Analyze Scan
+                  Run Stone Detection
                 </>
               )}
             </Button>
@@ -255,30 +264,45 @@ export const KidneyScanAnalyzer = () => {
           {result && (
             <section className="rounded-xl border bg-card p-6 shadow-card animate-fade-in">
               <h3 className="text-xl font-semibold flex items-center gap-2">
-                {getResultIcon(result.label)}
+                {getResultIcon(result.stoneDetected)}
                 Analysis Result
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
-                AI-powered diagnosis based on the uploaded CT scan.
+                Stone-screening outcome generated from the uploaded CT image.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Diagnosis</p>
-                  <p className={`text-2xl font-bold ${getResultColor(result.label)}`}>{result.label}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Stone Detection</p>
+                  <p className={`text-2xl font-bold ${getResultColor(result.stoneDetected)}`}>
+                    {result.stoneDetected ? 'Stone Detected' : 'No Stone Detected'}
+                  </p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Confidence Score</p>
+                  <p className="text-sm font-medium text-muted-foreground">Stone Probability</p>
                   <p className="text-2xl font-bold text-foreground">
-                    {(result.confidence * 100).toFixed(1)}%
+                    {(result.stoneProbability * 100).toFixed(1)}%
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Decision Threshold</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {(result.decisionThreshold * 100).toFixed(1)}%
                   </p>
                 </div>
               </div>
 
+              <div className="mt-6 rounded-lg border bg-muted/40 p-4">
+                <p className="text-sm text-muted-foreground">
+                  Model top class: <strong>{result.topClassLabel}</strong> at{' '}
+                  <strong>{(result.topClassConfidence * 100).toFixed(1)}%</strong>
+                </p>
+              </div>
+
               <div className="mt-6 p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Disclaimer:</strong> This AI analysis is for educational and research purposes only.
-                  Always consult with a qualified healthcare professional for medical diagnosis and treatment decisions.
+                  <strong>Disclaimer:</strong> This output is a decision-support screening signal, not a standalone diagnosis.
+                  Final interpretation must be performed by a qualified clinician.
                 </p>
               </div>
             </section>
