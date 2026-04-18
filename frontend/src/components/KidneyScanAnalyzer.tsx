@@ -1,21 +1,27 @@
-import React, { useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileImage, Stethoscope, AlertCircle, CheckCircle, Activity } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/button';
+import { Activity, AlertCircle, CheckCircle, FileImage, Stethoscope, Upload } from 'lucide-react';
+import React, { useRef, useState } from 'react';
 
 interface AnalysisResult {
   label: string;
   confidence: number;
 }
 
+interface PredictResponse {
+  prediction_label: string;
+  confidence: string | number;
+  error?: string;
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+
 export const KidneyScanAnalyzer = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -31,7 +37,7 @@ export const KidneyScanAnalyzer = () => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelection(e.dataTransfer.files[0]);
     }
@@ -40,30 +46,19 @@ export const KidneyScanAnalyzer = () => {
   const handleFileSelection = (file: File) => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select an image file (JPG, PNG, etc.)",
-        variant: "destructive",
-      });
+      setErrorMessage('Invalid file type. Please select an image file (JPG, PNG, etc.).');
       return;
     }
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please select an image smaller than 10MB",
-        variant: "destructive",
-      });
+      setErrorMessage('File too large. Please select an image smaller than 10MB.');
       return;
     }
 
     setSelectedFile(file);
     setResult(null);
-    toast({
-      title: "File uploaded successfully",
-      description: `${file.name} is ready for analysis`,
-    });
+    setErrorMessage(null);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,32 +71,42 @@ export const KidneyScanAnalyzer = () => {
     if (!selectedFile) return;
 
     setIsAnalyzing(true);
-    
+    setErrorMessage(null);
+
     try {
-      // Simulate API call - replace with actual API integration
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Mock result - replace with actual API response
-      const mockResults = [
-        { label: 'Normal', confidence: 0.92 },
-        { label: 'Cyst', confidence: 0.78 },
-        { label: 'Stone', confidence: 0.85 },
-        { label: 'Tumor', confidence: 0.67 },
-      ];
-      
-      const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
-      setResult(randomResult);
-      
-      toast({
-        title: "Analysis completed",
-        description: `Kidney scan analysis finished with ${(randomResult.confidence * 100).toFixed(1)}% confidence`,
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await fetch(`${API_BASE_URL}/predict`, {
+        method: 'POST',
+        body: formData,
       });
-    } catch (error) {
-      toast({
-        title: "Analysis failed",
-        description: "An error occurred during analysis. Please try again.",
-        variant: "destructive",
+
+      const data = (await response.json()) as PredictResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Prediction request failed.');
+      }
+
+      const rawConfidence =
+        typeof data.confidence === 'string' ? parseFloat(data.confidence) : data.confidence;
+
+      if (Number.isNaN(rawConfidence)) {
+        throw new Error('Backend returned an invalid confidence value.');
+      }
+
+      const normalizedConfidence = rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
+
+      setResult({
+        label: data.prediction_label,
+        confidence: Math.max(0, Math.min(1, normalizedConfidence)),
       });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'An unexpected error occurred during analysis. Please try again.';
+      setErrorMessage(message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -136,7 +141,6 @@ export const KidneyScanAnalyzer = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-medical-blue-light to-background">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Stethoscope className="h-10 w-10 text-primary" />
@@ -151,77 +155,75 @@ export const KidneyScanAnalyzer = () => {
         </div>
 
         <div className="max-w-4xl mx-auto space-y-8">
-          {/* Upload Section */}
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+          <section className="rounded-xl border bg-card p-6 shadow-card">
+            <div className="mb-5">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
                 <Upload className="h-5 w-5" />
                 Upload CT Scan
-              </CardTitle>
-              <CardDescription>
-                Select or drag and drop a CT scan image for analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`
-                  relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200
-                  ${dragActive ? 'border-primary bg-medical-blue-light' : 'border-border'}
-                  ${selectedFile ? 'border-medical-success bg-medical-success/5' : ''}
-                  hover:border-primary hover:bg-medical-blue-light/50
-                `}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileInput}
-                  className="hidden"
-                />
-                
-                {selectedFile ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center">
-                      <FileImage className="h-16 w-16 text-medical-success" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-medical-success">File Selected</p>
-                      <p className="text-sm text-muted-foreground">{selectedFile.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center">
-                      <Upload className="h-16 w-16 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-medium">Drag & Drop CT Scan Image Here</p>
-                      <p className="text-sm text-muted-foreground">
-                        Supports JPG, PNG, and other image formats (max 10MB)
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-4"
-                >
-                  Browse Files
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Select or drag and drop a CT scan image for analysis.
+              </p>
+            </div>
 
-          {/* Action Button */}
+            <div
+              className={`
+                relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200
+                ${dragActive ? 'border-primary bg-medical-blue-light' : 'border-border'}
+                ${selectedFile ? 'border-medical-success bg-medical-success/5' : ''}
+                hover:border-primary hover:bg-medical-blue-light/50
+              `}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileInput}
+                className="hidden"
+              />
+
+              {selectedFile ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center">
+                    <FileImage className="h-16 w-16 text-medical-success" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-medical-success">File Selected</p>
+                    <p className="text-sm text-muted-foreground">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center">
+                    <Upload className="h-16 w-16 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-medium">Drag and Drop CT Scan Image Here</p>
+                    <p className="text-sm text-muted-foreground">
+                      Supports JPG, PNG, and other image formats (max 10MB)
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-4"
+                type="button"
+              >
+                Browse Files
+              </Button>
+            </div>
+          </section>
+
           <div className="flex justify-center">
             <Button
               variant="medical"
@@ -244,46 +246,42 @@ export const KidneyScanAnalyzer = () => {
             </Button>
           </div>
 
-          {/* Result Display Section */}
+          {errorMessage && (
+            <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-destructive">
+              <p className="text-sm">{errorMessage}</p>
+            </section>
+          )}
+
           {result && (
-            <Card className="shadow-card animate-fade-in">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {getResultIcon(result.label)}
-                  Analysis Result
-                </CardTitle>
-                <CardDescription>
-                  AI-powered diagnosis based on the uploaded CT scan
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">
-                      Diagnosis
-                    </label>
-                    <div className={`text-2xl font-bold ${getResultColor(result.label)}`}>
-                      {result.label}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">
-                      Confidence Score
-                    </label>
-                    <div className="text-2xl font-bold text-foreground">
-                      {(result.confidence * 100).toFixed(1)}%
-                    </div>
-                  </div>
+            <section className="rounded-xl border bg-card p-6 shadow-card animate-fade-in">
+              <h3 className="text-xl font-semibold flex items-center gap-2">
+                {getResultIcon(result.label)}
+                Analysis Result
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                AI-powered diagnosis based on the uploaded CT scan.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Diagnosis</p>
+                  <p className={`text-2xl font-bold ${getResultColor(result.label)}`}>{result.label}</p>
                 </div>
-                
-                <div className="mt-6 p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Disclaimer:</strong> This AI analysis is for educational and research purposes only. 
-                    Always consult with a qualified healthcare professional for medical diagnosis and treatment decisions.
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Confidence Score</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {(result.confidence * 100).toFixed(1)}%
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              <div className="mt-6 p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Disclaimer:</strong> This AI analysis is for educational and research purposes only.
+                  Always consult with a qualified healthcare professional for medical diagnosis and treatment decisions.
+                </p>
+              </div>
+            </section>
           )}
         </div>
       </div>

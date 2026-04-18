@@ -1,0 +1,6 @@
+# Replace placeholders with real GitHub usernames or teams before enforcing branch protection.
+
+- @repo-maintainers
+  /backend/ @ml-maintainers
+  /frontend/ @frontend-maintainers
+  /.github/ @platform-maintainers
