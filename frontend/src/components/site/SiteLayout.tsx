@@ -1,7 +1,6 @@
 import { Button } from "@/components/button";
-import { SOLUTIONS_COUNT } from "@/content/siteContent";
 import { cn } from "@/lib/utils";
-import { Activity, Menu, Sparkles } from "lucide-react";
+import { Menu, Sparkles } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
@@ -16,8 +15,6 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { to: "/", label: "Home" },
-  { to: "/landing", label: "Landing" },
-  { to: "/solutions", label: "Solutions" },
   { to: "/analyzer", label: "Analyzer" },
 ];
 
@@ -50,8 +47,8 @@ const SiteFooter = () => {
           </p>
         </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>{SOLUTIONS_COUNT} focused solution pages</span>
-          <span>•</span>
+          <span>Kidney stone CT screening interface</span>
+          <span aria-hidden="true">•</span>
           <span>{year}</span>
         </div>
       </div>
@@ -90,11 +87,8 @@ export const SiteLayout = ({ children }: SiteLayoutProps) => {
           </nav>
 
           <div className="hidden items-center gap-3 md:flex">
-            <Button asChild variant="outline" className="rounded-full bg-white/75">
-              <Link to="/solutions">Explore {SOLUTIONS_COUNT} pages</Link>
-            </Button>
             <Button asChild className="rounded-full">
-              <Link to="/landing">Open Narrative</Link>
+              <Link to="/analyzer">Open Analyzer</Link>
             </Button>
           </div>
 
@@ -123,25 +117,6 @@ export const SiteLayout = ({ children }: SiteLayoutProps) => {
       <main key={location.pathname} className="relative z-10 animate-rise-in">
         {children}
       </main>
-
-      <section className="mx-auto mt-8 w-full max-w-7xl px-6">
-        <div className="glass-card flex flex-col gap-3 rounded-3xl p-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/15 text-primary">
-              <Activity className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="font-semibold text-foreground">Production-minded experience layer</p>
-              <p className="text-sm text-muted-foreground">
-                This frontend was redesigned with minimalist glass aesthetics and multi-page narrative architecture.
-              </p>
-            </div>
-          </div>
-          <Button asChild variant="outline" className="rounded-full bg-white/80">
-            <Link to="/solutions/live-demo-lab">Review demo lab flow</Link>
-          </Button>
-        </div>
-      </section>
 
       <SiteFooter />
     </div>

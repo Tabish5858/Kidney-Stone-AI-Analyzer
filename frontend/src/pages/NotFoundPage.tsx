@@ -11,16 +11,16 @@ const NotFoundPage = () => {
           <p className="eyebrow">404</p>
           <h1 className="display-title mt-3">Page not found</h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            The page you are looking for is not in this experience map. Return to home or open the solutions hub.
+            The page you requested is unavailable in this minimal experience. Return to home or open the analyzer.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild className="rounded-full">
               <Link to="/">Go to home</Link>
             </Button>
             <Button asChild variant="outline" className="rounded-full bg-white/80">
-              <Link to="/solutions">
+              <Link to="/analyzer">
                 <ArrowLeft className="h-4 w-4" />
-                Open solutions
+                Open analyzer
               </Link>
             </Button>
           </div>
