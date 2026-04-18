@@ -1,7 +1,5 @@
-import { KidneyScanAnalyzer } from '@/components/KidneyScanAnalyzer';
+import HomePage from "./HomePage";
 
-const Index = () => {
-  return <KidneyScanAnalyzer />;
-};
+const Index = () => <HomePage />;
 
 export default Index;

@@ -20,7 +20,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["Manrope", "Nunito Sans", "Trebuchet MS", "sans-serif"],
+        display: ["Fraunces", "Iowan Old Style", "Palatino", "serif"],
       },
       colors: {
         border: "hsl(var(--border))",

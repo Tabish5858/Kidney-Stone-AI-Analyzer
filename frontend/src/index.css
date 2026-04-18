@@ -1,77 +1,61 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    /* Medical theme - Professional blues and whites */
-    --background: 0 0% 100%;
-    --foreground: 215 25% 27%;
+    --background: 200 56% 98%;
+    --foreground: 214 32% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
+    --card-foreground: 214 32% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
+    --popover-foreground: 214 32% 20%;
 
-    /* Medical primary - Professional blue */
-    --primary: 211 100% 50%;
+    --primary: 198 96% 38%;
     --primary-foreground: 0 0% 100%;
 
-    /* Medical secondary - Light blue/gray */
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 215 25% 27%;
+    --secondary: 197 50% 91%;
+    --secondary-foreground: 214 32% 20%;
 
-    --muted: 214 32% 91%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 200 38% 92%;
+    --muted-foreground: 214 14% 40%;
 
-    /* Medical accent - Soft blue */
-    --accent: 214 32% 91%;
-    --accent-foreground: 215 25% 27%;
+    --accent: 191 55% 90%;
+    --accent-foreground: 214 32% 20%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 354 72% 53%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 211 100% 50%;
+    --border: 197 32% 86%;
+    --input: 197 32% 86%;
+    --ring: 198 96% 38%;
 
-    /* Medical specific colors */
-    --medical-success: 142 71% 45%;
-    --medical-warning: 38 92% 50%;
-    --medical-danger: 0 84% 60%;
-    --medical-blue-light: 214 100% 97%;
-    --medical-blue-dark: 215 25% 27%;
-    
-    /* Gradients */
-    --gradient-medical: linear-gradient(135deg, hsl(211 100% 50%), hsl(214 100% 97%));
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(214 32% 91%));
-    
-    /* Shadows */
-    --shadow-medical: 0 4px 6px -1px hsl(211 100% 50% / 0.1), 0 2px 4px -1px hsl(211 100% 50% / 0.06);
-    --shadow-card: 0 10px 15px -3px hsl(215 25% 27% / 0.1), 0 4px 6px -2px hsl(215 25% 27% / 0.05);
+    --medical-success: 149 68% 38%;
+    --medical-warning: 35 90% 50%;
+    --medical-danger: 354 72% 53%;
+    --medical-blue-light: 196 74% 95%;
+    --medical-blue-dark: 214 32% 20%;
 
-    --radius: 0.5rem;
+    --gradient-medical: linear-gradient(135deg, hsl(198 92% 42%), hsl(189 82% 71%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100% / 0.85), hsl(192 65% 93% / 0.75));
 
-    --sidebar-background: 0 0% 98%;
+    --shadow-medical: 0 14px 34px -18px hsl(198 92% 42% / 0.55);
+    --shadow-card: 0 14px 38px -24px hsl(214 32% 24% / 0.45);
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --radius: 0.9rem;
 
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 198 46% 96%;
+    --sidebar-foreground: 214 32% 20%;
+    --sidebar-primary: 198 96% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 195 40% 90%;
+    --sidebar-accent-foreground: 214 32% 20%;
+    --sidebar-border: 198 30% 84%;
+    --sidebar-ring: 198 96% 38%;
   }
 
   .dark {
@@ -120,5 +104,103 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Manrope", "Nunito Sans", "Trebuchet MS", sans-serif;
+    background-image:
+      radial-gradient(circle at 10% 15%, hsl(191 100% 82% / 0.52), transparent 28%),
+      radial-gradient(circle at 85% 5%, hsl(200 100% 78% / 0.47), transparent 24%),
+      radial-gradient(circle at 50% 100%, hsl(172 75% 80% / 0.32), transparent 35%),
+      linear-gradient(180deg, hsl(196 56% 98%), hsl(200 52% 96%));
+    min-height: 100vh;
+    text-rendering: geometricPrecision;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply border border-white/50 bg-white/60 shadow-card backdrop-blur-xl;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-primary;
+  }
+
+  .display-title {
+    font-family: "Fraunces", "Iowan Old Style", "Palatino", serif;
+    @apply text-4xl font-semibold leading-tight text-foreground md:text-5xl lg:text-6xl;
+  }
+
+  .section-title-wrap {
+    @apply max-w-4xl space-y-3;
+  }
+
+  .section-title {
+    font-family: "Fraunces", "Iowan Old Style", "Palatino", serif;
+    @apply text-2xl font-semibold leading-snug text-foreground md:text-3xl;
+  }
+
+  .liquid-orb {
+    @apply pointer-events-none absolute rounded-full blur-3xl;
+    filter: saturate(1.15);
+  }
+
+  .liquid-orb-a {
+    left: -120px;
+    top: 120px;
+    height: 300px;
+    width: 300px;
+    background: hsl(190 90% 75% / 0.35);
+    animation: driftSlow 16s ease-in-out infinite;
+  }
+
+  .liquid-orb-b {
+    right: -80px;
+    top: 280px;
+    height: 260px;
+    width: 260px;
+    background: hsl(201 94% 72% / 0.32);
+    animation: driftSlow 19s ease-in-out infinite reverse;
+  }
+
+  .liquid-orb-c {
+    left: 40%;
+    bottom: -140px;
+    height: 280px;
+    width: 280px;
+    background: hsl(170 76% 70% / 0.28);
+    animation: driftSlow 18s ease-in-out infinite;
+  }
+
+  .animate-rise-in {
+    animation: riseIn 540ms ease-out;
+  }
+}
+
+@keyframes driftSlow {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(0, -18px, 0) scale(1.06);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes riseIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
