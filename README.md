@@ -8,6 +8,7 @@ A full-stack AI-powered web application for classifying kidney CT scan images as
 - Upload and analyze kidney CT scan images
 - Deep learning model (MobileNetV2 transfer learning)
 - Real API-backed predictions with confidence scores
+- Kaggle dataset integration pipeline for stone ROI augmentation
 - Modern, responsive UI
 
 ## Getting Started
@@ -116,6 +117,27 @@ The `data/` directory contains ~12,000 CT scan images organized by class:
 - **Tumor**: 2,283 images
 
 **Note:** The whole dataset is excluded from the Git repository due to its large size (~GB). If you need to download the Dataset completly then See `data/README.md` for more details.
+
+## Improve Stone Detection with the Kaggle Dataset You Shared
+
+This repository can use the Kaggle kidney-stone object-detection dataset you provided:
+
+- https://www.kaggle.com/datasets/safurahajiheidari/kidney-stone-images/data
+- https://www.kaggle.com/datasets/safurahajiheidari/kidney-stone-images/code
+
+Because that dataset uses bounding boxes, the backend includes a conversion script that extracts stone crops and feeds them into classifier training.
+
+```bash
+cd backend
+python prepare_kaggle_stone_dataset.py --overwrite-output
+python train_model.py --extra-stone-dir ./datasets/stone_crops --epochs 25 --fine-tune-epochs 8
+```
+
+Then restart the backend so `app.py` loads the newly trained `kidney_stone_cnn_model.h5`.
+
+## Important Quality Note
+
+No medical AI model can be guaranteed to be perfect. To move toward near-production quality, you should validate on independent clinical data, monitor false negatives for stone cases, and review confusion matrices and calibration before deployment.
 
 ## License
 

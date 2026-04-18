@@ -1,7 +1,8 @@
 Flask
 flask-cors
+kaggle
 tensorflow
 numpy
 Pillow
 scikit-learn
-matplotlib 
+matplotlib
