@@ -6,6 +6,7 @@ A full-stack AI-powered web application for kidney stone detection from CT scan 
 
 - Upload and analyze kidney CT scan images
 - Stone-focused API decisioning (`stone` vs `non-stone`)
+- Estimated stone size and location for detected stone cases
 - Deep learning model (MobileNetV2 transfer learning)
 - Real API-backed predictions with confidence scores
 - Kaggle dataset integration pipeline for stone ROI augmentation
@@ -85,7 +86,7 @@ A full-stack AI-powered web application for kidney stone detection from CT scan 
    echo "VITE_API_BASE_URL=http://localhost:5000" > .env.local
    ```
 
-5. Open your browser at [http://localhost:8080](http://localhost:8080)
+5. Open your browser at [http://localhost:5173](http://localhost:5173)
 
 ## Project Structure
 
@@ -118,6 +119,11 @@ The `data/` directory contains ~12,000 CT scan images organized by class:
 - **Tumor**: 2,283 images
 
 The serving API is now stone-focused: model output is converted into `stone_detected` and `stone_probability` for deployment simplicity.
+
+For `stone_detected=true`, the API also returns a `stone_measurement` object with
+pixel-space bounding box and size metrics (`max_dimension`, `equivalent_diameter`,
+and area). Optional millimeter values are included when `pixel_spacing_mm` is
+provided in the upload form body.
 
 **Note:** The whole dataset is excluded from the Git repository due to its large size (~GB). If you need to download the Dataset completly then See `data/README.md` for more details.
 

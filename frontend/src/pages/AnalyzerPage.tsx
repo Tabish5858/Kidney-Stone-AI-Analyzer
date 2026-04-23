@@ -3,6 +3,42 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { Activity, AlertCircle, CheckCircle2, FileImage, UploadCloud } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
 
+type StoneBoundingBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+  center_x: number;
+  center_y: number;
+};
+
+type StoneSizePx = {
+  area: number;
+  width: number;
+  height: number;
+  max_dimension: number;
+  equivalent_diameter: number;
+};
+
+type StoneSizeMm = {
+  width: number;
+  height: number;
+  max_dimension: number;
+  equivalent_diameter: number;
+  pixel_spacing: number;
+};
+
+type StoneMeasurement = {
+  available: boolean;
+  method: string;
+  reason?: string;
+  bounding_box?: StoneBoundingBox;
+  size_px?: StoneSizePx;
+  size_mm?: StoneSizeMm;
+};
+
 type PredictResponse = {
   prediction_label: string;
   confidence?: string | number;
@@ -11,6 +47,7 @@ type PredictResponse = {
   decision_threshold?: number;
   top_class_label?: string;
   top_class_confidence?: number;
+  stone_measurement?: StoneMeasurement;
   error?: string;
 };
 
@@ -20,12 +57,31 @@ type AnalyzerResult = {
   decisionThreshold: number;
   topClassLabel: string;
   topClassConfidence: number;
+  stoneMeasurement: StoneMeasurement | null;
+};
+
+const parseStoneMeasurement = (
+  measurement: StoneMeasurement | undefined,
+  stoneDetected: boolean
+): StoneMeasurement | null => {
+  if (!measurement) {
+    return stoneDetected
+      ? {
+        available: false,
+        method: "intensity_component_v1",
+        reason: "measurement_missing",
+      }
+      : null;
+  }
+
+  return measurement;
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
 
 const AnalyzerPage = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [pixelSpacingMm, setPixelSpacingMm] = useState<string>("0.5");
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +127,11 @@ const AnalyzerPage = () => {
       const payload = new FormData();
       payload.append("file", file);
 
+      const spacingValue = Number.parseFloat(pixelSpacingMm);
+      if (Number.isFinite(spacingValue) && spacingValue > 0) {
+        payload.append("pixel_spacing_mm", spacingValue.toString());
+      }
+
       const response = await fetch(`${API_BASE_URL}/predict`, {
         method: "POST",
         body: payload,
@@ -102,6 +163,12 @@ const AnalyzerPage = () => {
         decisionThreshold: Math.max(0, Math.min(1, data.decision_threshold ?? 0.5)),
         topClassLabel: data.top_class_label ?? data.prediction_label ?? "unknown",
         topClassConfidence: Math.max(0, Math.min(1, data.top_class_confidence ?? stoneProbability ?? 0)),
+        stoneMeasurement: parseStoneMeasurement(
+          data.stone_measurement,
+          typeof data.stone_detected === "boolean"
+            ? data.stone_detected
+            : data.prediction_label === "stone"
+        ),
       });
     } catch (unknownError: unknown) {
       const message = unknownError instanceof Error ? unknownError.message : "Unexpected error during analysis.";
@@ -126,13 +193,29 @@ const AnalyzerPage = () => {
           <article className="glass-card rounded-3xl p-6 md:p-8">
             <h2 className="text-xl font-semibold text-foreground">Upload CT Image</h2>
             <p className="mt-2 text-sm text-muted-foreground">Supported formats: JPG, PNG, BMP, WEBP. Max file size: 10MB.</p>
-
+            <div className="mt-5 space-y-3">
+              <label htmlFor="pixel_spacing" className="block">
+                <p className="text-sm font-semibold text-foreground">Pixel Spacing (optional)</p>
+                <p className="mt-1 text-xs text-muted-foreground">Enter mm per pixel for accurate physical size (e.g., 0.5 for 0.5mm/pixel). If empty, only pixel measurements shown.</p>
+                <input
+                  id="pixel_spacing"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max="100"
+                  value={pixelSpacingMm}
+                  onChange={(e) => setPixelSpacingMm(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-white/40 bg-white/70 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="0.5"
+                />
+              </label>
+            </div>
             <div
               className={`mt-6 rounded-3xl border-2 border-dashed p-8 text-center transition-all duration-300 ${isDragging
-                  ? "border-primary bg-primary/10"
-                  : file
-                    ? "border-emerald-400/70 bg-emerald-100/55"
-                    : "border-white/50 bg-white/55"
+                ? "border-primary bg-primary/10"
+                : file
+                  ? "border-emerald-400/70 bg-emerald-100/55"
+                  : "border-white/50 bg-white/55"
                 }`}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -229,6 +312,80 @@ const AnalyzerPage = () => {
                     Confidence {" "}
                     <span className="font-semibold text-foreground">{(result.topClassConfidence * 100).toFixed(1)}%</span>
                   </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/50 bg-white/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">Estimated Stone Size</p>
+                  {result.stoneMeasurement?.available && result.stoneMeasurement.size_px ? (
+                    <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+                      <p>
+                        Max dimension {" "}
+                        <span className="font-semibold text-foreground">
+                          {result.stoneMeasurement.size_px.max_dimension}px
+                        </span>
+                      </p>
+                      <p>
+                        Equivalent diameter {" "}
+                        <span className="font-semibold text-foreground">
+                          {result.stoneMeasurement.size_px.equivalent_diameter.toFixed(2)}px
+                        </span>
+                      </p>
+                      <p>
+                        Bounding box {" "}
+                        <span className="font-semibold text-foreground">
+                          {result.stoneMeasurement.size_px.width}x{result.stoneMeasurement.size_px.height}px
+                        </span>
+                      </p>
+                      {result.stoneMeasurement.bounding_box ? (
+                        <p>
+                          Location {" "}
+                          <span className="font-semibold text-foreground">
+                            x={result.stoneMeasurement.bounding_box.x}, y={result.stoneMeasurement.bounding_box.y}
+                          </span>
+                        </p>
+                      ) : null}
+                      {result.stoneMeasurement.size_mm ? (
+                        <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Physical Size (Millimeters)</p>
+                          <div className="mt-2 space-y-1 text-sm">
+                            <p>
+                              Max dimension {" "}
+                              <span className="font-semibold text-foreground">
+                                {result.stoneMeasurement.size_mm.max_dimension.toFixed(2)} mm
+                              </span>
+                              {" "}
+                              <span className="text-xs text-muted-foreground">
+                                ({(result.stoneMeasurement.size_mm.max_dimension / 10).toFixed(2)} cm)
+                              </span>
+                            </p>
+                            <p>
+                              Equivalent diameter {" "}
+                              <span className="font-semibold text-foreground">
+                                {result.stoneMeasurement.size_mm.equivalent_diameter.toFixed(2)} mm
+                              </span>
+                              {" "}
+                              <span className="text-xs text-muted-foreground">
+                                ({(result.stoneMeasurement.size_mm.equivalent_diameter / 10).toFixed(2)} cm)
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Based on {result.stoneMeasurement.size_mm.pixel_spacing} mm/pixel spacing
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="rounded-lg border border-amber-200/50 bg-amber-50/60 p-3 text-xs text-amber-900">
+                          💡 To see measurements in mm/cm, enter pixel spacing above (e.g., 0.5 mm/pixel for typical CT scans) and run detection again.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {result.stoneDetected
+                        ? "Stone was detected, but size estimation was not available for this image."
+                        : "Size estimation is only generated when stone is detected."}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (

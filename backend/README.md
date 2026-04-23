@@ -64,6 +64,22 @@ curl http://localhost:5000/ready
 - `decision_threshold`: threshold used for decisioning
 - `top_class_label`: top class from the full model output (for transparency)
 - `top_class_confidence`: confidence for top class
+- `stone_measurement`: size and location estimation payload
+
+### Stone Measurement Payload
+
+When `stone_detected=true`, `stone_measurement` attempts to estimate stone size and location
+using an intensity-based connected-component pipeline:
+
+- `available`: whether measurement could be produced
+- `method`: currently `intensity_component_v1`
+- `reason`: present when unavailable (`stone_not_detected`, `no_component_above_min_size`, etc.)
+- `bounding_box`: image-space location with `x`, `y`, `width`, `height`, `right`, `bottom`, `center_x`, `center_y`
+- `size_px`: size metrics in pixels (`area`, `width`, `height`, `max_dimension`, `equivalent_diameter`)
+- `size_mm`: optional physical-size metrics when `pixel_spacing_mm` is sent in the form body
+
+If no stone is detected, the API returns `stone_measurement.available=false` with
+reason `stone_not_detected`.
 
 ## Model Training
 

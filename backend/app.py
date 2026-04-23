@@ -8,6 +8,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from stone_measurement import estimate_stone_measurement
+
 app = Flask(__name__)
 
 default_origins = [
@@ -82,6 +84,25 @@ def error_response(message: str, status_code: int):
     return jsonify({"error": message}), status_code
 
 
+def parse_optional_positive_float(value: str | None) -> float | None:
+    if value is None:
+        return None
+
+    raw_value = value.strip()
+    if raw_value == "":
+        return None
+
+    try:
+        parsed = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+    if parsed <= 0:
+        return None
+
+    return parsed
+
+
 model = load_inference_model(MODEL_PATH)
 with LABELS_PATH.open("r", encoding="utf-8") as f:
     labels = json.load(f)
@@ -126,14 +147,18 @@ except Exception:
     MODEL_READY = False
 
 
-def prepare_image(image_file):
+def load_uploaded_image(image_file) -> Image.Image:
     image_file.stream.seek(0)
     with Image.open(image_file.stream) as raw_image:
-        img = ImageOps.exif_transpose(raw_image).convert("RGB")
-        img = img.resize(IMAGE_SIZE)
-        img_array = tf.keras.preprocessing.image.img_to_array(img)
+        image = ImageOps.exif_transpose(raw_image).convert("RGB")
 
     image_file.stream.seek(0)
+    return image
+
+
+def prepare_image_for_model(image: Image.Image):
+    model_image = image.resize(IMAGE_SIZE)
+    img_array = tf.keras.preprocessing.image.img_to_array(model_image)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array.astype(np.float32)
 
@@ -179,12 +204,17 @@ def predict():
         return error_response("Unsupported file type", 400)
 
     try:
-        prepared_image = prepare_image(file)
+        source_image = load_uploaded_image(file)
+        prepared_image = prepare_image_for_model(source_image)
     except (UnidentifiedImageError, OSError):
         return error_response("Invalid or corrupted image file", 400)
     except Exception:
         app.logger.exception("Image preparation failed")
         return error_response("Failed to process the uploaded image", 400)
+
+    pixel_spacing_mm = parse_optional_positive_float(
+        request.form.get("pixel_spacing_mm")
+    )
 
     try:
         # Make prediction
@@ -196,6 +226,26 @@ def predict():
 
         stone_probability = float(probabilities[STONE_LABEL_INDEX])
         stone_detected = stone_probability >= STONE_THRESHOLD
+
+        stone_measurement = {
+            "available": False,
+            "method": "intensity_component_v1",
+            "reason": "stone_not_detected",
+        }
+
+        if stone_detected:
+            try:
+                stone_measurement = estimate_stone_measurement(
+                    source_image,
+                    pixel_spacing_mm=pixel_spacing_mm,
+                )
+            except Exception:
+                app.logger.exception("Stone measurement failed")
+                stone_measurement = {
+                    "available": False,
+                    "method": "intensity_component_v1",
+                    "reason": "measurement_pipeline_failed",
+                }
 
         top_index = int(np.argmax(probabilities))
         top_confidence = float(probabilities[top_index])
@@ -211,6 +261,7 @@ def predict():
                 "decision_threshold": STONE_THRESHOLD,
                 "top_class_label": top_label,
                 "top_class_confidence": top_confidence,
+                "stone_measurement": stone_measurement,
             }
         )
     except Exception:
